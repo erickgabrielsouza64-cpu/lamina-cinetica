@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lâmina Cinética 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Orbitron', sans-serif;
+            color: #fff;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .hud-text {
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        #screens {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            transition: opacity 0.3s;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .menu-box {
+            text-align: center;
+            background: linear-gradient(135deg, rgba(0, 20, 40, 0.9), rgba(0, 40, 80, 0.9));
+            padding: 3rem;
+            border-radius: 1rem;
+            border: 2px solid #0ff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), inset 0 0 20px rgba(0, 255, 255, 0.2);
+            pointer-events: auto;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .glow-title {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+        }
+
+        .glow-btn {
+            background: transparent;
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+            margin-top: 1.5rem;
+        }
+
+        .glow-btn:hover {
+            background: #0ff;
+            color: #000;
+            box-shadow: 0 0 20px #0ff, 0 0 40px #0ff;
+            transform: scale(1.05);
+        }
+
+        .glow-btn:active {
+            transform: scale(0.95);
+        }
+
+        .instructions {
+            color: #aaa;
+            font-size: 0.95rem;
+            margin-top: 10px;
+            max-width: 400px;
+            line-height: 1.4;
+        }
+
+        .highlight {
+            color: #f0f;
+            text-shadow: 0 0 5px #f0f;
+        }
+
+        .shop-box {
+            background: rgba(0, 20, 20, 0.8);
+            border: 1px solid #0f0;
+            border-radius: 10px;
+            padding: 10px;
+            margin-top: 15px;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+        .shop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+        }
+        .btn-buy {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+        }
+        .btn-buy:disabled {
+            background: #555;
+            cursor: not-allowed;
+            color: #888;
+        }
+
+        @media (max-width: 600px) {
+            .glow-title { font-size: 1.8rem; }
+            .menu-box { padding: 1.2rem; width: 92%; }
+            .hud-text { font-size: 1.1rem; }
+            .instructions { font-size: 0.85rem; }
+            .glow-btn { padding: 10px 20px; font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <div class="flex justify-between w-full">
+            <div id="score-display" class="hud-text text-cyan-400">SCORE: 0</div>
+            <div id="level-display" class="hud-text text-fuchsia-400">NÓS: 5</div>
+        </div>
+        <div id="chromo-display" class="hud-text text-green-400 mt-2 text-xl" style="text-shadow: 0 0 10px #0f0;">🧬 CROMOSSOMOS: 0</div>
+    </div>
+
+    <div id="screens">
+        <div id="start-menu" class="menu-box">
+            <div class="glow-title">Lâmina Cinética</div>
+            <div class="instructions mx-auto">
+                Mova o mouse ou arraste o dedo para mover seu Núcleo (Azul).<br>
+                Seu núcleo <span class="highlight">não tem armas</span> e é frágil.<br>
+                Use o movimento para <span class="highlight">girar seu chicote de plasma</span>.<br>
+                Cuidado com <b>Âncoras (Roxo)</b> que te prendem (faça um "flick" rápido para escapar) e <b>Estilhaçadores (Laranja)</b>.
+            </div>
+            
+            <div class="shop-box">
+                <h3 class="text-green-400 font-bold mb-2">LOJA DE MUTAÇÕES (PERMANENTES)</h3>
+                <div class="shop-item">
+                    <span>Chicote Duplo (150 🧬)<br><small class="text-gray-400">Adiciona uma segunda cauda de plasma.</small></span>
+                    <button id="btn-buy-whip" class="btn-buy" onclick="buyUpgrade('doubleWhip', 150)">COMPRAR</button>
+                </div>
+                <div class="shop-item" style="border:none; margin:0; padding:0;">
+                    <span>Escudo de Nova (100 🧬)<br><small class="text-gray-400">Sobrevive a 1 hit fatal explodindo a tela.</small></span>
+                    <button id="btn-buy-shield" class="btn-buy" onclick="buyUpgrade('coreShield', 100)">COMPRAR</button>
+                </div>
+            </div>
+
+            <button id="btn-start" class="glow-btn">Iniciar Sincronização</button>
+        </div>
+
+        <div id="game-over-menu" class="menu-box hidden">
+            <div class="glow-title text-red-500">Sistema Destruído</div>
+            <div class="instructions mx-auto mb-4">
+                Sua pontuação final foi: <span id="final-score" class="text-cyan-400 font-bold">0</span><br>
+                Coletados: <span id="final-chromos" class="text-green-400 font-bold">0</span> 🧬
+            </div>
+            <button id="btn-restart" class="glow-btn">Ressuscitar Núcleo</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        const screens = document.getElementById('screens');
+        const startMenu = document.getElementById('start-menu');
+        const gameOverMenu = document.getElementById('game-over-menu');
+        const btnStart = document.getElementById('btn-start');
+        const btnRestart = document.getElementById('btn-restart');
+        const scoreDisplay = document.getElementById('score-display');
+        const levelDisplay = document.getElementById('level-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const chromoDisplay = document.getElementById('chromo-display');
+        const finalChromosDisplay = document.getElementById('final-chromos');
+        const btnBuyWhip = document.getElementById('btn-buy-whip');
+        const btnBuyShield = document.getElementById('btn-buy-shield');
+
+        let chromosomes = parseInt(localStorage.getItem('kinetic_chromosomes') || '0');
+        let upgrades = JSON.parse(localStorage.getItem('kinetic_upgrades') || '{"doubleWhip":false, "coreShield":false}');
+        let sessionChromos = 0;
+        let shieldActive = false;
+        let attachedAnchors = 0;
+
+        let gameState = 'START';
+        let score = 0;
+        let combo = 0;
+        let lastKillTime = 0;
+        
+        let scene, camera, renderer;
+        let clock = new THREE.Clock();
+        
+        let mousePosition = new THREE.Vector2();
+        let targetWorldPos = new THREE.Vector3();
+        const planeZ = 0;
+
+        let playerCore;
+        let whips = [];
+        const WHIP_SEGMENTS = 5;
+        let maxWhipSegments = 5;
+        const WHIP_NODE_DIST = 1.2;
+        const WHIP_STIFFNESS = 0.4;
+        const WHIP_DAMPING = 0.75;
+        
+        let enemies = [];
+        let particles = [];
+        let enemySpawnTimer = 0;
+        let enemySpawnRate = 1.5;
+        let gameDifficultyTime = 0;
+
+        const coreMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+        const whipMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+        const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0044, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, wireframe: true });
+        const splinterMaterial = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, wireframe: true });
+        const anchorMaterial = new THREE.MeshBasicMaterial({ color: 0x8800ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, wireframe: true });
+
+        const coreGeo = new THREE.SphereGeometry(0.8, 16, 16);
+        const whipNodeGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        const enemyGeo = new THREE.IcosahedronGeometry(1, 0);
+        const splinterGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2); 
+        const miniSplinterGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6); 
+        const anchorGeo = new THREE.OctahedronGeometry(1.2, 0); 
+        const particleGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050505, 0.015);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, window.innerWidth < window.innerHeight ? 45 : 30);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            createBackground();
+
+            window.addEventListener('resize', onWindowResize, false);
+            
+            container.addEventListener('mousemove', onMouseMove, false);
+            container.addEventListener('touchstart', onTouchMove, { passive: false });
+            container.addEventListener('touchmove', onTouchMove, { passive: false });
+        }
+
+        function createBackground() {
+            const gridHelper = new THREE.GridHelper(200, 50, 0x003333, 0x001111);
+            gridHelper.rotation.x = Math.PI / 2;
+            gridHelper.position.z = -5;
+            scene.add(gridHelper);
+            
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 500;
+            const starPos = new Float32Array(starCount * 3);
+            for(let i=0; i<starCount*3; i++) {
+                starPos[i] = (Math.random() - 0.5) * 200;
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            const starMat = new THREE.PointsMaterial({color: 0x555555, size: 0.5});
+            const stars = new THREE.Points(starGeo, starMat);
+            stars.position.z = -10;
+            scene.add(stars);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            camera.position.z = window.innerWidth < window.innerHeight ? 45 : 30;
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function updateTargetPosition(clientX, clientY) {
+            mousePosition.x = (clientX / window.innerWidth) * 2 - 1;
+            mousePosition.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            const vector = new THREE.Vector3(mousePosition.x, mousePosition.y, 0.5);
+            vector.unproject(camera);
+            const dir = vector.sub(camera.position).normalize();
+            const distance = (planeZ - camera.position.z) / dir.z;
+            
+            targetWorldPos.copy(camera.position).add(dir.multiplyScalar(distance));
+            
+            const boundX = 25 * camera.aspect;
+            const boundY = 25;
+            targetWorldPos.x = THREE.MathUtils.clamp(targetWorldPos.x, -boundX, boundX);
+            targetWorldPos.y = THREE.MathUtils.clamp(targetWorldPos.y, -boundY, boundY);
+        }
+
+        function onMouseMove(event) {
+            if(gameState !== 'PLAYING') return;
+            updateTargetPosition(event.clientX, event.clientY);
+        }
+
+        function onTouchMove(event) {
+            if(gameState !== 'PLAYING') return;
+            event.preventDefault();
+            if(event.touches.length > 0) {
+                updateTargetPosition(event.touches[0].clientX, event.touches[0].clientY);
+            }
+        }
+
+        function updateShopUI() {
+            chromoDisplay.innerText = `🧬 CROMOSSOMOS: ${chromosomes}`;
+            
+            if (upgrades.doubleWhip) {
+                btnBuyWhip.innerText = "EQUIPADO";
+                btnBuyWhip.disabled = true;
+            } else if (chromosomes < 150) {
+                btnBuyWhip.disabled = true;
+            } else {
+                btnBuyWhip.disabled = false;
+            }
+
+            if (upgrades.coreShield) {
+                btnBuyShield.innerText = "EQUIPADO";
+                btnBuyShield.disabled = true;
+            } else if (chromosomes < 100) {
+                btnBuyShield.disabled = true;
+            } else {
+                btnBuyShield.disabled = false;
+            }
+        }
+
+        window.buyUpgrade = function(type, cost) {
+            if (chromosomes >= cost && !upgrades[type]) {
+                chromosomes -= cost;
+                upgrades[type] = true;
+                localStorage.setItem('kinetic_chromosomes', chromosomes);
+                localStorage.setItem('kinetic_upgrades', JSON.stringify(upgrades));
+                updateShopUI();
+            }
+        }
+
+        function initPlayer() {
+            if (playerCore) scene.remove(playerCore);
+            whips.forEach(whipArr => whipArr.forEach(node => scene.remove(node.mesh)));
+            
+            shieldActive = upgrades.coreShield;
+            attachedAnchors = 0;
+            
+            playerCore = new THREE.Mesh(coreGeo, coreMaterial);
+            scene.add(playerCore);
+            playerCore.position.set(0,0,0);
+            targetWorldPos.set(0,0,0);
+            
+            if (shieldActive) {
+                playerCore.scale.set(1.2, 1.2, 1.2);
+                coreMaterial.color.setHex(0x00ff88); 
+            } else {
+                playerCore.scale.set(1, 1, 1);
+                coreMaterial.color.setHex(0x00ffff);
+            }
+
+            whips = [];
+            whips.push([]);
+            if (upgrades.doubleWhip) whips.push([]);
+
+            maxWhipSegments = 5;
+            for(let i=0; i<maxWhipSegments; i++) {
+                addWhipNode();
+            }
+        }
+
+        function addWhipNode() {
+            whips.forEach((whipArr, index) => {
+                const mesh = new THREE.Mesh(whipNodeGeo, whipMaterial);
+                const scale = 1 - (whipArr.length * 0.05);
+                mesh.scale.set(scale, scale, scale);
+                
+                if (whipArr.length === 0) {
+                    mesh.position.copy(playerCore.position);
+                    if (index === 1) mesh.position.x += 1.0;
+                } else {
+                    mesh.position.copy(whipArr[whipArr.length-1].mesh.position);
+                }
+                
+                scene.add(mesh);
+                whipArr.push({ mesh: mesh, velocity: new THREE.Vector3(0,0,0) });
+            });
+            
+            levelDisplay.innerText = `NÓS: ${whips[0].length}`;
+            whipMaterial.color.setHex(0xffffff);
+            setTimeout(() => { whipMaterial.color.setHex(0x00aaff); }, 200);
+        }
+
+        function updatePlayerAndWhip(dt) {
+            const flickSpeed = playerCore.position.distanceTo(targetWorldPos);
+            if (attachedAnchors > 0 && flickSpeed > 8.0) {
+                attachedAnchors = 0;
+                spawnParticles(playerCore.position, anchorMaterial.color, 30);
+                
+                coreMaterial.color.setHex(0xffffff);
+                setTimeout(() => { coreMaterial.color.setHex(shieldActive ? 0x00ff88 : 0x00ffff); }, 200);
+                
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    if (enemies[i].type === 'anchor' && enemies[i].attached) {
+                        scene.remove(enemies[i].mesh);
+                        enemies.splice(i, 1);
+                        addChromosomes(3); 
+                    }
+                }
+            }
+
+            let lerpFactor = 10;
+            if (attachedAnchors > 0) {
+                lerpFactor = Math.max(1.0, 10 - (attachedAnchors * 3));
+                playerCore.position.x += (Math.random() - 0.5) * 0.2;
+                playerCore.position.y += (Math.random() - 0.5) * 0.2;
+            }
+            playerCore.position.lerp(targetWorldPos, lerpFactor * dt);
+            
+            playerCore.rotation.z += 5 * dt;
+            playerCore.rotation.x += 2 * dt;
+
+            whips.forEach((whipArr, wIdx) => {
+                let prevPos = playerCore.position;
+                for(let i=0; i<whipArr.length; i++) {
+                    let node = whipArr[i];
+                    let dir = new THREE.Vector3().subVectors(prevPos, node.mesh.position);
+                    let dist = dir.length();
+                    
+                    if (dist > 0.1) {
+                        dir.normalize();
+                        let stretch = dist - WHIP_NODE_DIST;
+                        let force = dir.multiplyScalar(stretch * WHIP_STIFFNESS);
+                        if (wIdx === 1) force.multiplyScalar(0.85); 
+                        node.velocity.add(force);
+                    }
+                    
+                    node.velocity.multiplyScalar(WHIP_DAMPING);
+                    node.mesh.position.add(node.velocity);
+                    prevPos = node.mesh.position;
+                }
+            });
+        }
+
+        function spawnEnemy() {
+            if (gameState !== 'PLAYING') return;
+
+            let type = 'basic';
+            let geo = enemyGeo;
+            let mat = enemyMaterial;
+            let speedBase = 3 + (gameDifficultyTime * 0.05);
+            
+            if (gameDifficultyTime > 15) {
+                const rand = Math.random();
+                if (rand < 0.15) { 
+                    type = 'splinter';
+                    geo = splinterGeo;
+                    mat = splinterMaterial;
+                    speedBase *= 0.6;
+                } else if (rand < 0.25) { 
+                    type = 'anchor';
+                    geo = anchorGeo;
+                    mat = anchorMaterial;
+                    speedBase *= 1.2;
+                }
+            }
+
+            const mesh = new THREE.Mesh(geo, mat);
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 35;
+            mesh.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+            mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+            
+            scene.add(mesh);
+            
+            enemies.push({
+                mesh: mesh,
+                type: type,
+                speed: speedBase * (0.8 + Math.random() * 0.4),
+                rotSpeed: new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5),
+                attached: false
+            });
+        }
+        
+        function spawnMiniSplinters(position) {
+            for(let i=0; i<3; i++) {
+                const mesh = new THREE.Mesh(miniSplinterGeo, splinterMaterial);
+                mesh.position.copy(position);
+                mesh.position.x += (Math.random() - 0.5);
+                mesh.position.y += (Math.random() - 0.5);
+                scene.add(mesh);
+                
+                enemies.push({
+                    mesh: mesh,
+                    type: 'mini',
+                    speed: 8 + (gameDifficultyTime * 0.05),
+                    rotSpeed: new THREE.Vector3(Math.random(), Math.random(), Math.random()),
+                    attached: false
+                });
+            }
+        }
+
+        function updateEnemies(dt) {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let enemy = enemies[i];
+                
+                if (enemy.attached) {
+                    enemy.mesh.position.copy(playerCore.position);
+                    enemy.mesh.rotation.x += 10 * dt;
+                    enemy.mesh.rotation.y += 10 * dt;
+                    continue; 
+                }
+
+                let dir = new THREE.Vector3().subVectors(playerCore.position, enemy.mesh.position).normalize();
+                enemy.mesh.position.add(dir.multiplyScalar(enemy.speed * dt));
+                
+                enemy.mesh.rotation.x += enemy.rotSpeed.x * 5 * dt;
+                enemy.mesh.rotation.y += enemy.rotSpeed.y * 5 * dt;
+                enemy.mesh.rotation.z += enemy.rotSpeed.z * 5 * dt;
+
+                const distToCore = enemy.mesh.position.distanceTo(playerCore.position);
+                if (distToCore < 1.5) { 
+                    if (enemy.type === 'anchor') {
+                        enemy.attached = true;
+                        attachedAnchors++;
+                        spawnParticles(enemy.mesh.position, anchorMaterial.color, 10);
+                        continue;
+                    } else {
+                        if (shieldActive) {
+                            triggerShieldNova();
+                            return;
+                        } else {
+                            gameOver();
+                            return; 
+                        }
+                    }
+                }
+
+                let hit = false;
+                for(let w=0; w < whips.length; w++) {
+                    if (hit) break;
+                    let currentWhip = whips[w];
+                    
+                    for (let j = currentWhip.length - 1; j >= 0; j--) {
+                        let node = currentWhip[j];
+                        const distToNode = enemy.mesh.position.distanceTo(node.mesh.position);
+                        const nodeSpeedSq = node.velocity.lengthSq();
+                        
+                        let hitRadius = enemy.type === 'mini' ? 1.0 : 1.4;
+                        if (distToNode < hitRadius && nodeSpeedSq > 0.1) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hit) {
+                    spawnParticles(enemy.mesh.position, enemy.mesh.material.color, 15);
+                    scene.remove(enemy.mesh);
+                    enemies.splice(i, 1);
+                    
+                    if (enemy.type === 'splinter') {
+                        spawnMiniSplinters(enemy.mesh.position);
+                    }
+                    
+                    let dropChance = Math.random();
+                    if (enemy.type === 'basic' && dropChance < 0.2) addChromosomes(1);
+                    else if (enemy.type === 'splinter') addChromosomes(2);
+                    else if (enemy.type === 'mini' && dropChance < 0.5) addChromosomes(1);
+                    else if (enemy.type === 'anchor') addChromosomes(4);
+
+                    updateScore();
+                }
+            }
+        }
+        
+        function triggerShieldNova() {
+            shieldActive = false;
+            coreMaterial.color.setHex(0x00ffff); 
+            playerCore.scale.set(1, 1, 1);
+            
+            spawnParticles(playerCore.position, 0x00ff88, 60);
+            
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (enemies[i].mesh.position.distanceTo(playerCore.position) < 15) {
+                    spawnParticles(enemies[i].mesh.position, enemies[i].mesh.material.color, 5);
+                    scene.remove(enemies[i].mesh);
+                    enemies.splice(i, 1);
+                }
+            }
+            
+            attachedAnchors = 0;
+            document.body.style.backgroundColor = "rgba(0,255,136,0.3)";
+            setTimeout(() => { document.body.style.backgroundColor = "#050505"; }, 200);
+        }
+
+        function addChromosomes(amount) {
+            sessionChromos += amount;
+            chromosomes += amount;
+            updateShopUI();
+        }
+
+        function updateScore() {
+            let now = performance.now();
+            if (now - lastKillTime < 1000) {
+                combo++;
+            } else {
+                combo = 1;
+            }
+            lastKillTime = now;
+
+            const pointsGained = 10 * combo;
+            score += pointsGained;
+            scoreDisplay.innerText = `SCORE: ${score}`;
+
+            scoreDisplay.style.color = '#fff';
+            scoreDisplay.style.transform = 'scale(1.5)';
+            setTimeout(() => {
+                scoreDisplay.style.color = '#0ff';
+                scoreDisplay.style.transform = 'scale(1)';
+            }, 100);
+
+            const expectedWhipLength = 5 + Math.floor(score / 500);
+            if (expectedWhipLength > whips[0].length && whips[0].length < 30) { 
+                addWhipNode();
+            }
+        }
+
+        function spawnParticles(position, colorHex, count = 15) {
+            let colorMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, blending: THREE.AdditiveBlending });
+            
+            for(let i=0; i<count; i++) {
+                const p = new THREE.Mesh(particleGeo, colorMat);
+                p.position.copy(position);
+                
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 5 + Math.random() * 15;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+                const vz = (Math.random() - 0.5) * 10;
+                
+                scene.add(p);
+                particles.push({
+                    mesh: p,
+                    velocity: new THREE.Vector3(vx, vy, vz),
+                    life: 1.0 
+                });
+            }
+        }
+
+        function updateParticles(dt) {
+            for(let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.mesh.position.addScaledVector(p.velocity, dt);
+                p.velocity.multiplyScalar(0.9);
+                p.life -= dt * 2.0;
+                
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                } else {
+                    p.mesh.scale.setScalar(p.life);
+                }
+            }
+        }
+
+        function resetGame() {
+            enemies.forEach(e => scene.remove(e.mesh));
+            enemies = [];
+            particles.forEach(p => scene.remove(p.mesh));
+            particles = [];
+            
+            score = 0;
+            combo = 0;
+            sessionChromos = 0;
+            gameDifficultyTime = 0;
+            enemySpawnRate = 2.0;
+            
+            scoreDisplay.innerText = `SCORE: ${score}`;
+            initPlayer();
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            screens.classList.add('hidden');
+            startMenu.classList.add('hidden');
+            gameOverMenu.classList.add('hidden');
+            resetGame();
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            spawnParticles(playerCore.position, coreMaterial.color, 40);
+            scene.remove(playerCore);
+            
+            localStorage.setItem('kinetic_chromosomes', chromosomes);
+            
+            screens.classList.remove('hidden');
+            startMenu.classList.add('hidden');
+            gameOverMenu.classList.remove('hidden');
+            
+            finalScoreDisplay.innerText = score;
+            finalChromosDisplay.innerText = `+${sessionChromos}`;
+            updateShopUI();
+        }
+
+        btnStart.addEventListener('click', startGame);
+        btnRestart.addEventListener('click', startGame);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1);
+            
+            if (gameState === 'PLAYING') {
+                gameDifficultyTime += dt;
+                enemySpawnTimer += dt;
+                const currentSpawnRate = Math.max(0.2, enemySpawnRate - (gameDifficultyTime * 0.01));
+                
+                if (enemySpawnTimer > currentSpawnRate) {
+                    spawnEnemy();
+                    enemySpawnTimer = 0;
+                }
+                
+                updatePlayerAndWhip(dt);
+                updateEnemies(dt);
+            }
+            
+            updateParticles(dt);
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            try {
+                initThreeJS();
+                updateShopUI();
+                animate();
+            } catch (e) {
+                console.error("Initialization error:", e);
+            }
+        };
+    </script>
+</body>
+</html>
